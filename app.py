@@ -206,8 +206,11 @@ def predict():
         file.save(filepath)
         
         ext = filename.rsplit('.', 1)[1].lower()
-        is_live_webcam = (filename == 'live_capture.webm')
-        source_type = "webcam" if is_live_webcam else "upload"
+
+        if filename == "webcam.jpg":
+            source_type = "webcam"
+        else:
+            source_type = "upload"
         
         # Route standard file uploads to the Machine Learning models with Safety Checks
         if ext in ['mp4', 'avi', 'mov', 'webm']:
@@ -238,6 +241,5 @@ def predict():
 # Initialize the database file
 init_db()
 
-if __name__ == '__main__':
-    if __name__ == "__main__":
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)

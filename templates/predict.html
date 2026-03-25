@@ -36,6 +36,11 @@
         <div id="status" style="margin-top: 12px; font-weight: 600; color: #4a5568; font-size: 12px;">System Ready</div>
     </div>
 </div>
+<video id="video" width="300" autoplay></video>
+<button onclick="capture()">Capture</button>
+<canvas id="canvas" style="display:none;"></canvas>
+
+
 
 <style>
     @keyframes pulse {
@@ -110,5 +115,33 @@
             mediaRecorder.stop();
         }, 5000);
     };
+
+
+navigator.mediaDevices.getUserMedia({ video: true })
+.then(stream => {
+    document.getElementById("video").srcObject = stream;
+});
+
+function capture() {
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob(blob => {
+        let formData = new FormData();
+        formData.append("file", blob, "capture.jpg");
+
+        fetch("/predict", {
+            method: "POST",
+            body: formData
+        }).then(res => res.text())
+          .then(data => document.body.innerHTML = data);
+    });
+}
+
 </script>
 {% endblock %}
