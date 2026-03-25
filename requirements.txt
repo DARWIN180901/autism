@@ -33,7 +33,7 @@ database-setup==0.0.5
 DBUtils==3.1.0
 decorator==5.2.1
 Django==5.2.11
-dlib @ file:///D:/Drowsiness-Detection-master/dlib-19.22.99-cp310-cp310-win_amd64.whl
+dlib
 earthengine-api==1.7.4
 eerepr==0.1.2
 et_xmlfile==2.0.0
