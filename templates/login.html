@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 40px auto;">
+    
+    <div style="text-align: center; margin-bottom: 25px;">
+        <h2 style="margin: 0; color: #005b9f; font-size: 20px;">Secure Staff Portal</h2>
+        <p style="color: #718096; margin-top: 5px;">Authorized Clinical Personnel Only</p>
+    </div>
+
+    <form action="/login" method="POST">
+        <label>Staff ID / Username</label>
+        <input type="text" name="username" placeholder="Enter your credentials" required>
+        
+        <label>Password</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+        
+        <button type="submit" style="margin-top: 10px;">Secure Login</button>
+    </form>
+    
+    <div style="text-align: center; margin-top: 20px; font-size: 12px;">
+        <a href="/register" style="color: #005b9f; text-decoration: none;">Need system access? Request an account here.</a>
+    </div>
+
+</div>
+{% endblock %}

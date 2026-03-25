@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div style="margin-bottom: 25px;">
+    <h1 style="color: #005b9f; margin-bottom: 5px;">Clinical Dashboard</h1>
+    <p style="color: #718096; margin-top: 0;">Welcome, <strong>{{ username }}</strong>. System status: <span style="color: #28a745; font-weight: bold;">Online</span>.</p>
+</div>
+
+<div class="card" style="margin-bottom: 25px;">
+    <h2 style="color: #005b9f; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-top: 0;">System Architecture</h2>
+    <p>This diagnostic support tool leverages state-of-the-art <strong>Convolutional Neural Networks (CNN)</strong> to analyze visual behavioral patterns. The core inference engine is powered by MobileNetV2, selected for its high efficiency and accuracy in extracting deep hierarchical features from complex visual media.</p>
+    
+    
+    
+    <p style="margin-bottom: 0;">By processing these extracted features, the network identifies subtle visual markers correlated with specific behavioral metrics, providing quantifiable data to support clinical observation.</p>
+</div>
+
+<div style="display: flex; gap: 20px; flex-wrap: wrap;">
+    
+    <div class="card" style="flex: 1; min-width: 300px;">
+        <h2 style="color: #005b9f; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-top: 0;">Dual-Model Routing</h2>
+        <p>To ensure maximum accuracy, the system routes media to specialized, independent AI models based on the input format:</p>
+        
+        
+        
+        <ul style="padding-left: 20px; color: #4a5568; margin-bottom: 0;">
+            <li style="margin-bottom: 8px;"><strong>Static Image Engine:</strong> Trained exclusively on high-resolution spatial features from still photography.</li>
+            <li><strong>Temporal Video Engine:</strong> A separate pipeline that extracts localized frames (1 FPS) to analyze behavioral changes and physical movements over time.</li>
+        </ul>
+    </div>
+
+    <div class="card" style="flex: 1; min-width: 300px;">
+        <h2 style="color: #005b9f; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-top: 0;">Live Telemetry</h2>
+        <p>The Analysis Engine includes a secure, 5-second live webcam assessment tool. This feature captures real-time biometric telemetry, tracking variables such as:</p>
+        
+        
+        
+        <ul style="padding-left: 20px; color: #4a5568; margin-bottom: 0;">
+            <li style="margin-bottom: 8px;">Facial landmark stability and head pose estimation.</li>
+            <li style="margin-bottom: 8px;">Eye Aspect Ratio (EAR) for involuntary blink rate detection.</li>
+            <li>Motor movement thresholds and localized repetitive motions.</li>
+        </ul>
+    </div>
+
+</div>
+
+<div class="card" style="background-color: #fffaf0; border-top: 4px solid #ed8936; margin-top: 25px;">
+    <h3 style="color: #c05621; margin-top: 0; font-size: 15px;">⚠ Clinical Disclaimer</h3>
+    <p style="color: #9c4221; margin-bottom: 0; line-height: 1.5;">This application is a behavioral analysis prototype designed for educational, research, and technical demonstration purposes. It is <strong>not</strong> a certified medical device and must not be used to issue formal clinical diagnoses of Autism Spectrum Disorder (ASD). All outputs should be strictly reviewed by licensed medical professionals.</p>
+</div>
+
+{% endblock %}
