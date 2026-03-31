@@ -42,17 +42,17 @@ def init_db():
 
 # --- 2. LOAD MODELS ---
 IMAGE_MODEL_PATH = 'model/optimized_model.h5'
-VIDEO_MODEL_PATH = 'model/video_optimized_model.h5'
 
 image_model = None
-video_model = None
+video_model = None # We will point this to the image model
 
 try:
     if os.path.exists(IMAGE_MODEL_PATH):
         image_model = load_model(IMAGE_MODEL_PATH)
-        print("✅ Image model loaded.")
+        video_model = image_model  # SHARE the memory, don't load a second file!
+        print("✅ Shared Model loaded into memory.")
 except Exception as e:
-    print(f"❌ Error loading image model: {e}")
+    print(f"❌ Error: {e}")
 
 try:
     if os.path.exists(VIDEO_MODEL_PATH):
@@ -145,33 +145,37 @@ def predict_page():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'user_id' not in session: return redirect(url_for('login'))
-    if 'file' not in request.files: return "No file part"
-    
-    file = request.files['file']
-    if file.filename == '': return "No selected file"
-    
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    ext = filename.rsplit('.', 1)[1].lower()
-
     try:
-        if ext in ['mp4', 'avi', 'mov', 'webm']:
-            if video_model is None: return "Video model not loaded."
-            class_idx, conf = process_and_predict_video(filepath)
-        elif ext in ['jpg', 'jpeg', 'png']:
-            if image_model is None: return "Image model not loaded."
-            class_idx, conf = process_and_predict_image(filepath)
-        else:
-            return "Unsupported file type."
+        if 'user_id' not in session: return redirect(url_for('login'))
+        if 'file' not in request.files: return "No file part"
+        
+        file = request.files['file']
+        if file.filename == '': return "No selected file"
+        
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        ext = filename.rsplit('.', 1)[1].lower()
 
-        label = CLASSES.get(class_idx, "Unknown")
-        return render_template('result.html', label=label, confidence=conf * 100)
+        try:
+            if ext in ['mp4', 'avi', 'mov', 'webm']:
+                if video_model is None: return "Video model not loaded."
+                class_idx, conf = process_and_predict_video(filepath)
+            elif ext in ['jpg', 'jpeg', 'png']:
+                if image_model is None: return "Image model not loaded."
+                class_idx, conf = process_and_predict_image(filepath)
+            else:
+                return "Unsupported file type."
+
+            label = CLASSES.get(class_idx, "Unknown")
+            return render_template('result.html', label=label, confidence=conf * 100)
+        finally:
+            if os.path.exists(filepath):
+                os.remove(filepath)
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
-
+        gc.collect()
 init_db()
 
 if __name__ == "__main__":
