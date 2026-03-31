@@ -42,28 +42,30 @@ def init_db():
         db.commit()
 
 # --- 2. LOAD MODELS (MEM-OPTIMIZED) ---
+# --- 2. LOAD MODELS (MAXIMUM MEMORY SAVING) ---
 MODEL_PATH = 'model/optimized_model.h5'
 
 image_model = None
 video_model = None 
 
-try:
-    if os.path.exists(MODEL_PATH):
-        # Load EXACTLY ONE model into RAM
+if os.path.exists(MODEL_PATH):
+    try:
+        # Load the model once
         image_model = load_model(MODEL_PATH)
-        video_model = image_model  # Alias it so both image and video functions work
-        print("✅ SUCCESS: Shared single model loaded into memory.")
-    else:
-        print(f"❌ ERROR: Model file not found at {MODEL_PATH}")
-except Exception as e:
-    print(f"❌ Load Error: {e}")
+        video_model = image_model 
+        print("✅ SUCCESS: Shared single model loaded.")
+    except Exception as e:
+        print(f"❌ Load Error: {e}")
+else:
+    print(f"❌ ERROR: {MODEL_PATH} not found.")
 
+# Load classes
 try:
     with open('model/class_indices.json', 'r') as f:
         class_mapping = json.load(f)
         CLASSES = {int(k): v.replace('_', ' ').title() for k, v in class_mapping.items()}
-except FileNotFoundError:
-    CLASSES = {0: 'Autism', 1: 'Invalid', 2: 'No Autism'} 
+except Exception:
+    CLASSES = {0: 'Autism', 1: 'Invalid', 2: 'No Autism'}
 
 # --- 3. MACHINE LEARNING LOGIC ---
 def process_and_predict_image(image_path):
