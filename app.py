@@ -3,6 +3,7 @@ import cv2
 import sqlite3
 import numpy as np
 import json
+import gc  # Added for manual memory management
 from flask import Flask, request, render_template, session, redirect, url_for, g
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -40,26 +41,22 @@ def init_db():
                        password TEXT NOT NULL)''')
         db.commit()
 
-# --- 2. LOAD MODELS ---
-IMAGE_MODEL_PATH = 'model/optimized_model.h5'
+# --- 2. LOAD MODELS (MEM-OPTIMIZED) ---
+MODEL_PATH = 'model/optimized_model.h5'
 
 image_model = None
-video_model = None # We will point this to the image model
+video_model = None 
 
 try:
-    if os.path.exists(IMAGE_MODEL_PATH):
-        image_model = load_model(IMAGE_MODEL_PATH)
-        video_model = image_model  # SHARE the memory, don't load a second file!
-        print("✅ Shared Model loaded into memory.")
+    if os.path.exists(MODEL_PATH):
+        # Load EXACTLY ONE model into RAM
+        image_model = load_model(MODEL_PATH)
+        video_model = image_model  # Alias it so both image and video functions work
+        print("✅ SUCCESS: Shared single model loaded into memory.")
+    else:
+        print(f"❌ ERROR: Model file not found at {MODEL_PATH}")
 except Exception as e:
-    print(f"❌ Error: {e}")
-
-try:
-    if os.path.exists(VIDEO_MODEL_PATH):
-        video_model = load_model(VIDEO_MODEL_PATH)
-        print("✅ Video model loaded.")
-except Exception as e:
-    print(f"❌ Error loading video model: {e}")
+    print(f"❌ Load Error: {e}")
 
 try:
     with open('model/class_indices.json', 'r') as f:
@@ -74,26 +71,32 @@ def process_and_predict_image(image_path):
     image = image.resize((224, 224))
     image_array = img_to_array(image) / 255.0
     image_array = np.expand_dims(image_array, axis=0)
-    predictions = image_model.predict(image_array)[0]
+    predictions = image_model.predict(image_array, verbose=0)[0]
     class_idx = np.argmax(predictions)
     return class_idx, predictions[class_idx]
 
 def process_and_predict_video(video_path):
     cap = cv2.VideoCapture(video_path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Sample only 5 frames to keep memory usage low
+    frame_indices = np.linspace(0, max(0, total_frames - 1), 5, dtype=int)
+    
     frame_predictions = []
-    frame_count = 0
+    current_frame = 0
+    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret: break
-        if frame_count % 30 == 0:
+        if current_frame in frame_indices:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame_rgb).resize((224, 224))
             img_array = img_to_array(img) / 255.0
             img_array = np.expand_dims(img_array, axis=0)
             pred = video_model.predict(img_array, verbose=0)[0]
             frame_predictions.append(pred)
-        frame_count += 1
+        current_frame += 1
     cap.release()
+    
     if frame_predictions:
         avg_predictions = np.mean(frame_predictions, axis=0)
         class_idx = np.argmax(avg_predictions)
@@ -145,37 +148,36 @@ def predict_page():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    if 'user_id' not in session: return redirect(url_for('login'))
+    if 'file' not in request.files: return "No file part"
+    
+    file = request.files['file']
+    if file.filename == '': return "No selected file"
+    
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    ext = filename.rsplit('.', 1)[1].lower()
+
     try:
-        if 'user_id' not in session: return redirect(url_for('login'))
-        if 'file' not in request.files: return "No file part"
-        
-        file = request.files['file']
-        if file.filename == '': return "No selected file"
-        
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        ext = filename.rsplit('.', 1)[1].lower()
+        if ext in ['mp4', 'avi', 'mov', 'webm']:
+            if video_model is None: return "Model not loaded."
+            class_idx, conf = process_and_predict_video(filepath)
+        elif ext in ['jpg', 'jpeg', 'png']:
+            if image_model is None: return "Model not loaded."
+            class_idx, conf = process_and_predict_image(filepath)
+        else:
+            return "Unsupported file type."
 
-        try:
-            if ext in ['mp4', 'avi', 'mov', 'webm']:
-                if video_model is None: return "Video model not loaded."
-                class_idx, conf = process_and_predict_video(filepath)
-            elif ext in ['jpg', 'jpeg', 'png']:
-                if image_model is None: return "Image model not loaded."
-                class_idx, conf = process_and_predict_image(filepath)
-            else:
-                return "Unsupported file type."
-
-            label = CLASSES.get(class_idx, "Unknown")
-            return render_template('result.html', label=label, confidence=conf * 100)
-        finally:
-            if os.path.exists(filepath):
-                os.remove(filepath)
+        label = CLASSES.get(class_idx, "Unknown")
+        return render_template('result.html', label=label, confidence=float(conf) * 100)
+    except Exception as e:
+        return f"Analysis error: {str(e)}"
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
-        gc.collect()
+        gc.collect() # Manually trigger garbage collection to free RAM
+
 init_db()
 
 if __name__ == "__main__":
