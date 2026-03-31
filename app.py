@@ -3,13 +3,12 @@ import cv2
 import sqlite3
 import numpy as np
 import json
-import gc  # Added for manual memory management
+import gc
 from flask import Flask, request, render_template, session, redirect, url_for, g
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.image import img_to_array
 from PIL import Image
+import tflite_runtime.interpreter as tflite  # Only use the lightweight runtime
 
 app = Flask(__name__)
 app.secret_key = 'super_secret_secure_key_123' 
@@ -18,7 +17,7 @@ DATABASE = 'users.db'
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# --- 1. DATABASE CONNECTION LOGIC ---
+# --- 1. DATABASE CONNECTION ---
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
@@ -29,8 +28,7 @@ def get_db():
 @app.teardown_appcontext
 def close_connection(exception):
     db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+    if db is not None: db.close()
 
 def init_db():
     with app.app_context():
@@ -41,25 +39,19 @@ def init_db():
                        password TEXT NOT NULL)''')
         db.commit()
 
-# --- 2. LOAD MODELS (MEM-OPTIMIZED) ---
-# --- 2. LOAD MODELS (MAXIMUM MEMORY SAVING) ---
-MODEL_PATH = 'model/optimized_model.h5'
+# --- 2. LOAD TFLITE MODEL ---
+TFLITE_PATH = "model/optimized_model.tflite"
 
-image_model = None
-video_model = None 
+try:
+    interpreter = tflite.Interpreter(model_path=TFLITE_PATH)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    print("✅ SUCCESS: TFLite Model loaded.")
+except Exception as e:
+    print(f"❌ TFLite Load Error: {e}")
+    interpreter = None
 
-if os.path.exists(MODEL_PATH):
-    try:
-        # Load the model once
-        image_model = load_model(MODEL_PATH)
-        video_model = image_model 
-        print("✅ SUCCESS: Shared single model loaded.")
-    except Exception as e:
-        print(f"❌ Load Error: {e}")
-else:
-    print(f"❌ ERROR: {MODEL_PATH} not found.")
-
-# Load classes
 try:
     with open('model/class_indices.json', 'r') as f:
         class_mapping = json.load(f)
@@ -67,20 +59,26 @@ try:
 except Exception:
     CLASSES = {0: 'Autism', 1: 'Invalid', 2: 'No Autism'}
 
-# --- 3. MACHINE LEARNING LOGIC ---
+# --- 3. ML LOGIC USING TFLITE ---
+def run_tflite_inference(img_array):
+    """Helper to run inference without loading the full TF library"""
+    interpreter.set_tensor(input_details[0]['index'], img_array.astype(np.float32))
+    interpreter.invoke()
+    return interpreter.get_tensor(output_details[0]['index'])[0]
+
 def process_and_predict_image(image_path):
     image = Image.open(image_path).convert('RGB')
     image = image.resize((224, 224))
-    image_array = img_to_array(image) / 255.0
-    image_array = np.expand_dims(image_array, axis=0)
-    predictions = image_model.predict(image_array, verbose=0)[0]
+    img_array = np.array(image, dtype=np.float32) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    
+    predictions = run_tflite_inference(img_array)
     class_idx = np.argmax(predictions)
     return class_idx, predictions[class_idx]
 
 def process_and_predict_video(video_path):
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    # Sample only 5 frames to keep memory usage low
     frame_indices = np.linspace(0, max(0, total_frames - 1), 5, dtype=int)
     
     frame_predictions = []
@@ -92,9 +90,10 @@ def process_and_predict_video(video_path):
         if current_frame in frame_indices:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame_rgb).resize((224, 224))
-            img_array = img_to_array(img) / 255.0
+            img_array = np.array(img, dtype=np.float32) / 255.0
             img_array = np.expand_dims(img_array, axis=0)
-            pred = video_model.predict(img_array, verbose=0)[0]
+            
+            pred = run_tflite_inference(img_array)
             frame_predictions.append(pred)
         current_frame += 1
     cap.release()
@@ -103,7 +102,7 @@ def process_and_predict_video(video_path):
         avg_predictions = np.mean(frame_predictions, axis=0)
         class_idx = np.argmax(avg_predictions)
         return class_idx, avg_predictions[class_idx]
-    return 0, 0.0 
+    return 0, 0.0
 
 # --- 4. ROUTES ---
 @app.route('/')
@@ -162,11 +161,11 @@ def predict():
     ext = filename.rsplit('.', 1)[1].lower()
 
     try:
+        if interpreter is None: return "Model not loaded."
+
         if ext in ['mp4', 'avi', 'mov', 'webm']:
-            if video_model is None: return "Model not loaded."
             class_idx, conf = process_and_predict_video(filepath)
         elif ext in ['jpg', 'jpeg', 'png']:
-            if image_model is None: return "Model not loaded."
             class_idx, conf = process_and_predict_image(filepath)
         else:
             return "Unsupported file type."
@@ -178,7 +177,7 @@ def predict():
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
-        gc.collect() # Manually trigger garbage collection to free RAM
+        gc.collect()
 
 init_db()
 
